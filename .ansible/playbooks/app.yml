@@ -1,0 +1,12 @@
+---
+# APP
+- hosts: "{{harbor_servers|default('all')}}"
+  roles: [corpusops.roles/ansible_plugins]
+  tasks:
+  - when: ["cops_harbor_lifecycle_app|default(true)"]
+    tags: ["cops_harbor_lifecycle_app"]
+    include_role: {name: harbor_vars, allow_duplicates: false}
+  - when: ["cops_harbor_lifecycle_app"]
+    tags: ["cops_harbor_lifecycle_app"]
+    block:
+    - include_role: {name: harbor,    allow_duplicates: false}

@@ -1,0 +1,12 @@
+---
+# THIS SHOULD RESIDE IN AN ENCRYPTED VAULT
+cops_deploy_ssh_key_paths:
+  staging:
+    path: "{{'local/.ssh/deploy_staging'|copsf_abspath}}"
+    pub: |-
+      ssh-rsa AAAAxxx staging
+    private: |-
+      -----BEGIN RSA PRIVATE KEY-----
+      MIIxx
+      -----END RSA PRIVATE KEY-----
+

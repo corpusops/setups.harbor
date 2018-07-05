@@ -1,0 +1,85 @@
+bin
+/bootstrap.py
+cron_scripts/
+develop-eggs/
+downloads
+.DS_Store
+*.log
+*.pyc
+*.egg
+*.egg-link
+*.egg-info
+*.EGG-INFO
+/.buildout/
+/buildout-salt.cfg
+/etc/apache/100*.reverseproxy.conf
+/etc/init.d/
+/etc/loadbalancing/
+/etc/logrotate.conf
+/etc/project/kgs.cfg
+/etc/project/plone-kgs.cfg
+/etc/sys/settings-local.cfg
+/etc/sys/settings-prod.cfg
+/etc/www/apache.reverseproxy.conf
+/etc/www/nginx.reverseproxy.conf
+/include/
+/.installed.cfg
+/lib/
+/.mr.developer.cfg
+/parts
+/uuid.txt
+/var
+/var/log/apache/*.log
+/var/log/instance?.log
+/venv/
+/www/apache.reverseproxy.conf
+/www/nginx.reverseproxy.conf
+!/src/zopelib
+!/eggs/*.empty
+!/etc/sys
+/corpus-generic-zope-plone/
+
+## FRONT
+# compiled output
+frontend/dist
+frontend/tmp
+
+# dependencies
+frontend/node_modules
+
+# IDEs and editors
+frontend/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# misc
+frontend/.sass-cache
+frontend/connect.lock
+frontend/coverage/*
+frontend/libpeerconnection.log
+npm-debug.log
+testem.log
+frontend/typings
+
+# e2e
+frontend/e2e/*.js
+frontend/e2e/*.map
+
+#System Files
+.DS_Store
+Thumbs.db
+
+/.idea
+/local
+/.ansible/scripts/ansible_deploy_env

@@ -1,0 +1,85 @@
+---
+cops_harbor_back: testvar
+cops_harbor_dir: "/srv/docker/harbor"
+cops_harbor_d: "{{cops_harbor_dir}}/releases/{{cops_harbor_version}}"
+cops_harbor_c: "{{cops_harbor_dir}}/current"
+cops_harbor_version: "1.5.1"
+cops_harbor_releases_1.5.1:
+  url: "https://storage.googleapis.com/harbor-releases/harbor-online-installer-v{{cops_harbor_version}}.tgz"
+  crc:  "sha256:df548a57531ad9a03f7e8fa05054020c5a6aa3a6a5711e260243ae8d107fb7c6"
+  # see archive.tbz/harbor.cfg
+  db_version: 1.5.0
+cops_harbor_sshargs: >-
+  {% set k = hostvars[inventory_hostname].get(
+                'ansible_ssh_private_key_file', '') %}
+  {% if k%}-o IdentityFile={{k}} -o IdentitiesOnly=yes{%endif%}
+  {% if (
+      hostvars[inventory_hostname].ansible_connection|default('ssh')
+     ) not in [ 'smart', 'local'] %}
+  {{ hostvars[inventory_hostname].ssh_args | default('') }}
+  {{ hostvars[inventory_hostname].ansible_ssh_args | default('') }}
+  {{ hostvars[inventory_hostname].ansible_ssh_common_args | default('') }}
+  {{ hostvars[inventory_hostname].ansible_ssh_extra_args | default('') }}
+  {% endif %}
+cops_harbor_build: true
+cops_harbor_build_args: django
+cops_harbor_notary: true
+cops_harbor_clair: true
+cops_harbor_ssl_cert: null
+cops_harbor_ssl_key: null
+cops_harbor_data: "{{cops_harbor_dir}}/local/data"
+cops_harbor_db_password: "secret70a0VpwK66n54KB"
+cops_harbor_clair_password: "secret52zB5RWT30v2f7y"
+cops_harbor_clair_db: "clair"
+cops_harbor_admin_password: 05GB25q55r4I26G
+cops_harbor_email_identity: ""
+cops_harbor_email_server: "smtp.mydomain.com"
+cops_harbor_email_server_port: "25"
+cops_harbor_email_username: "sample_admin@mydomain.com"
+cops_harbor_email_password: "abc"
+cops_harbor_email_from: "admin <sample_admin@mydomain.com>"
+cops_harbor_email_ssl: "false"
+cops_harbor_email_insecure: "false"
+cops_harbor_logrotate_size: 200M
+cops_harbor_logrotate_count: 50
+cops_harbor_secretkey_path: /data
+cops_harbor_ssl_cert_path: null
+cops_harbor_ssl_cert_key_path: null
+cops_harbor_ssl_cert: null
+# cops_harbor_ssl_cert: |-
+#   -----BEGIN CERTIFICATE-----
+#   -----END CERTIFICATE-----
+cops_harbor_ssl_cert_key: null
+# cops_harbor_ssl_cert_key: |-
+#   -----BEGIN RSA PRIVATE KEY-----
+#   -----END RSA PRIVATE KEY-----
+cops_harbor_customize_crt: "on"
+cops_harbor_hostname: "{{ansible_fqdn}}"
+cops_harbor_ui_url_protocol: https
+cops_harbor_max_job_workers: 50
+cops_harbor_registry_storage_provider_name: filesystem
+cops_harbor_registry_storage_provider_config: ""
+cops_harbor_self_registration: "off"
+cops_harbor_token_expiration: 30
+cops_harbor_project_creation_restriction: everyone
+cops_harbor_ldap_basedn: ou=people,dc=mydomain,dc=com
+cops_harbor_ldap_uid: uid
+cops_harbor_ldap_scope: 2
+cops_harbor_ldap_timeout: 5
+cops_harbor_ldap_verify_cert: "true"
+cops_harbor_ldap_group_basedn: ou=group,dc=mydomain,dc=com
+cops_harbor_ldap_group_filter: objectclass=group
+cops_harbor_ldap_group_gid: cn
+cops_harbor_ldap_group_scope: 2
+cops_harbor_ldap_filter: "(objectClass=person)"
+cops_harbor_ldap_url: ldaps://ldap.mydomain.com
+cops_harbor_auth_mode: db_auth
+cops_harbor_http_proxy: ""
+cops_harbor_https_proxy: ""
+cops_harbor_no_proxy: 127.0.0.1,localhost,ui
+cops_harbor_admiral_url: NA
+cops_harbor_uaa_endpoint: uaa.mydomain.org
+cops_harbor_uaa_clientid: id
+cops_harbor_uaa_clientsecret: secret
+cops_harbor_uaa_verify_cert: "true"
+cops_harbor_uaa_ca_cert: /path/to/ca.pem

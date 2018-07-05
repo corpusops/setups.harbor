@@ -1,0 +1,4 @@
+---
+cops_harbor_defaultvar: test2
+harbor_servers: harbor_servers
+# vim:set ft=sls:

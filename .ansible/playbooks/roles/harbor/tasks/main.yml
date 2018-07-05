@@ -1,0 +1,63 @@
+---
+- file: {state: directory, mode: "0750", path: "{{item}}"}
+  with_items:
+  - "{{cops_harbor_dir}}"
+  - "{{cops_harbor_d}}"
+  - "{{cops_harbor_dir}}/local/logs"
+  - "{{cops_harbor_data}}"
+  - "{{cops_harbor_dir}}/local/mysql"
+  - "{{cops_harbor_dir}}/local/backup"
+- file:
+    state: link
+    force: true
+    src: "{{cops_harbor_d}}"
+    path: "{{cops_harbor_c}}"
+- file:
+    state: link
+    force: true
+    src: "{{cops_harbor_data}}"
+    path: "/data"
+
+- include_role: {name: corpusops.roles/install_archive}
+  vars:
+    _archive:
+      filetest: [docker-compose.yml]
+      mode: "0755"
+      app_path: "{{cops_harbor_dir}}/releases/{{cops_harbor_version}}"
+      urls:
+        archive_crc: "{{vars['cops_harbor_releases_'+cops_harbor_version].crc}}"
+        archive: "{{vars['cops_harbor_releases_'+cops_harbor_version].url}}"
+        verify_sha256: true
+- template:
+    src: "harbor.cfg"
+    dest: "{{cops_harbor_d}}/harbor.cfg"
+    mode: "0640"
+    trim_blocks: false
+- shell: |-
+    set -ex
+    {% set args = [] %}
+    {% if cops_harbor_notary%}{% set _=args.append('--with-notary')%}{%endif %} \
+    {% if cops_harbor_clair %}{% set _=args.append('--with-clair ')%}{%endif %} \
+    cd "{{cops_harbor_c}}"
+    echo ./install.sh {{args|join(' ')}}
+#- shell: |
+#    set -ex
+#    cd "{{cops_harbor_dir}}"
+#    docker-compose build {{cops_harbor_build_args}}
+#  when: "cops_harbor_build|copsf_asbool"
+#- include_role: {name: corpusops.roles/docker_compose_service}
+#  when: False
+#  vars:
+#    _docker_compose_service:
+#      project: "{{cops_harbor_composename}}"
+#      working_directory: "{{cops_harbor_dir}}"
+#      docker_compose_file: "docker-compose-prod.yml"
+#- name: Synchronise files inside the environment (deleguation)
+#  delegate_to: "localhost"
+#  synchronize:
+#    compress: false
+#    ssh_args: "{{cops_harbor_sshargs}}"
+#    src: "../../../../../"
+#    dest: "{{cops_harbor_dir}}/"
+#    rsync_opts: ["-azv", "--exclude", ".ansible", "--exclude", "local"]
+#    #update_opts: '--recursive'
