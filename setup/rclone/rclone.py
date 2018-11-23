@@ -139,6 +139,7 @@ def healthcheck(opts, lastlog=None, olddt=None):
 
 
 def get_last_log(logdata):
+    lastlog, olddt = None, None
     if logdata:
         olddt = [a for a in logdata if 'data' in logdata[a]][-1]
         lastlog = logdata[olddt]
