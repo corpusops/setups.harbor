@@ -68,7 +68,6 @@ harbor_docker_dot_env: |-
   F2B_TIMER=30
   {% if harbor_smtp_host %}
   SMTP_FROM={{harbor_smtp_from}}
-  SMTP_FROM_NAME={{harbor_smtp_from_name}}
   SMTP_TIMEOUT={{harbor_smtp_timeout}}
   SMTP_HOST={{harbor_smtp_host}}
   SMTP_PORT={{harbor_smtp_port}}
@@ -78,7 +77,11 @@ harbor_docker_dot_env: |-
   SMTP_PASSWORD={{harbor_smtp_password}}
   {% endif %}
   SMTP_TIMEOUT={{harbor_smtp_timeout}}
+  HARBOR_INVITE_DRYRUN={{harbor_invite_dryrun}}
+  HARBOR_INVITE_MAIL_NOTIFY={{harbor_invite_mail_notify}}
   HARBOR_RESTART_POLICY={{harbor_restart_policy}}
+harbor_invite_dryrun: "1"
+harbor_invite_mail_notify: "1"
 # https://github.com/harbor/jslib/issues/52
 # https://github.com/dani-garcia/harbor/issues/1166
 # cannot be set higher globally, only by users by their vault settings, but we should in the future.
@@ -98,7 +101,6 @@ harbor_stdout: /dev/null
 harbor_stderr: /dev/null
 harbor_signups_allowed: True
 harbor_smtp_from: ""
-harbor_smtp_from_name: harbor
 harbor_smtp_host: ""
 harbor_smtp_port: 465
 harbor_smtp_ssl: "true"
