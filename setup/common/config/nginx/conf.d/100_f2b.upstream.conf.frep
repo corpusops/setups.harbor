@@ -1,0 +1,5 @@
+# ansible managed
+geo $banned {
+  default 0;
+  include /nginx/deny.conf;
+}

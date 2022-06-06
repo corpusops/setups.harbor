@@ -1,0 +1,9 @@
+- unarchive:
+    src: "{{harbor_installer_url}}"
+    dest: "{{harbor_installer_dir}}"
+    remote_src: yes
+- name: Copy installer files
+  synchronize:
+    src: "{{ harbor_versioned_hostdir}}/installer/harbor/"
+    dest: "{{harbor_versioned_hostdir}}/"
+  delegate_to: "{{inventory_hostname}}"

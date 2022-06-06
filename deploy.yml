@@ -1,0 +1,4 @@
+---
+- hosts: "{{harbor_servers|default('harbor_servers')}}"
+  roles:
+  - {name: harbor/setup, tags: [setup]}

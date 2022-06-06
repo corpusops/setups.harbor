@@ -1,0 +1,13 @@
+- include_role: {name: corpusops.roles/docker_compose_service}
+  vars:
+    _docker_compose_service:
+      project: "{{harbor_compose_project}}"
+      state: "{{harbor_started_state}}"
+      working_directory: "{{harbor_hostdir}}"
+      stdout: "{{harbor_stdout}}"
+      stderr: "{{harbor_stderr}}"
+- shell: |-
+    set -ex
+    cd "{{harbor_hostdir}}"
+    docker-compose -p {{harbor_compose_project}} up -d
+  tags: [harbor_restart_services]

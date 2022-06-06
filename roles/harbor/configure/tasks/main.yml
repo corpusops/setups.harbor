@@ -1,0 +1,9 @@
+---
+- include_role: {name: harbor/layout}
+  tags: [harbor_layout]
+- include_role: {name: harbor/download_installer}
+  tags: [harbor_download_installer]
+- include_role: {name: harbor/prepare}
+  tags: [harbor_prepare]
+- include_role: {name: harbor/configs}
+  tags: [harbor_configs]

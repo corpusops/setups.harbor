@@ -1,0 +1,26 @@
+---
+matrix_domain: matrix.foo.net
+matrix_mxisd_domain: matrixid.foo.net
+matrix_goneb_domain: goneb.foo.net
+matrix_riot_domain: riot.foo.net
+matrix_db_password: xxx
+matrix_crt: "{{corpusops_ssl_certs['*.foo.net'][0]}}"
+matrix_key: "{{corpusops_ssl_certs['*.foo.net'][1]}}"
+matrix_ldap_dn: "uid=xxx,ou=People,dc=foo,dc=org"
+matrix_ldap_pw: "xxx"
+matrix_dh: |
+  2048-bit DH parameters taken from rfc3526
+  -----BEGIN DH PARAMETERS-----
+  xxx
+  -----END DH PARAMETERS-----
+matrix_signing_key: "xxx"
+matrix_macaroon_secret_key: "xxx"
+matrix_ldap_host: "ldap.foo.net"
+matrix_ldap_bdn: "ou=People,dc=foo,dc=org"
+matrix_ldap_mailattr: "shortMail"
+matrix_admin:
+  login: admin
+  password: xxx
+matrix_goneb_clients:
+- 127.0.0.1
+- 1.2.3.4

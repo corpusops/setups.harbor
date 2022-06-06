@@ -1,0 +1,13 @@
+version: "3.8"
+x-bases:
+  x-base: &base
+    env_file: [.env, .env.local]
+    environment:
+      TEST_MODE: "1"
+services:
+  app:
+    <<: [ *base ]
+  setup:
+    <<: [ *base ]
+volumes:
+  mails: {}

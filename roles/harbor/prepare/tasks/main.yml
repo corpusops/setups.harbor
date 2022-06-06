@@ -1,0 +1,17 @@
+
+- template:
+    src: "setup/{{item}}"
+    dest: "{{harbor_hostdir}}/{{item}}"
+    trim_blocks: false
+    force: true
+  loop: [harbor.yml]
+
+- template:
+    src: "setup/{{item}}"
+    dest: "{{harbor_hostdir}}/{{item}}"
+    trim_blocks: false
+    mode: "0750"
+    force: true
+  loop: [wrap_prepare]
+
+- shell: "{{harbor_hostdir}}/wrap_prepare"

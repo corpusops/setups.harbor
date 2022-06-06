@@ -1,0 +1,23 @@
+- set_fact:
+    harbor_host_dirs: |
+        {% set directories = [] %}
+        {% for harbor_volume in harbor_volumes %}
+        {% set d = harbor_volume.split(':')[0] %}
+        {% set _ = directories.append(d) %}
+        {% endfor %}
+        {% set _ = directories.append(harbor_installer_dir) %}
+        {% set _ = directories.append(harbor_data_volume) %}
+        {{ directories | to_json }}
+- file:
+    path: "{{item}}"
+    mode: "0711"
+    state: directory
+  with_items: "{{harbor_host_dirs}}"
+- file:
+    state: directory
+    path: "{{harbor_versioned_hostdir}}"
+- file:
+    state: link
+    force: true
+    src: "{{harbor_versioned_hostdir}}"
+    path: "{{harbor_hostdir}}"

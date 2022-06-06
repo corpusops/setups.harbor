@@ -1,0 +1,159 @@
+---
+# ansible managed
+version: '3.7'
+x-blocks:
+  env: &env
+    env_file: [.env]
+  restart: &restart
+    restart: "$HARBOR_RESTART_POLICY"
+networks:
+  harbor:
+    driver: bridge
+    ipam: {driver: default, config: [{subnet: "${HARBOR_NETWORK}.0/24"}]}
+services:
+  log: {networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.241"}}}
+  registry: {networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.242"}}}
+  registryctl: {networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.243"}}}
+  core: {networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.245"}}}
+  portal: {networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.246"}}}
+  redis: {networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.247"}}}
+  jobservice: {networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.248"}}}
+  setup:
+    dns_search: .
+    <<: [ *env, *restart ]
+    networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.101"}}
+    container_name: setup
+    image: "$HARBOR_BACKUP_IMAGE"
+    depends_on: [postgresql]
+    volumes: [helpers:/helpers, logs:/logs,
+              nginx:/nginx, ./common/config/nginx:/etc/nginx]
+    entrypoint:
+    - bash
+    - "-ec"
+    - |-
+      touch /logs/harbor.log
+      f=/started_$$(echo $$POSTGRES_DB|sed -re "s![/:]!__!g")
+      hf=/started_hr
+      nf=/nginx/started
+      u="postgres://$$POSTGRES_USER:$$POSTGRES_PASSWORD@$$POSTGRES_HOST:$$POSTGRES_PORT/$$POSTGRES_DB"
+      rf() { for fl in $$nf $$f $$hf;do if [ -f $$fl ] ;then rm -f $$fl;fi;done; }
+      export PATH=/cops_helpers:/$$PATH
+      rf
+      echo "Try connection to pgsql: $$POSTGRES_DB & wait for db init" >&2
+      ( while true;do if ( echo select 1|psql -v ON_ERROR_STOP=1 $$u; );then touch $$f&&break;fi;done )&
+      echo "Refresh helpers" >&2 && \
+        cp -vf /usr/bin/diff /cops_helpers/* /helpers && touch $$hf
+      set -x
+      dockerize -timeout 300s -wait "file:///$$f"
+      dockerize -timeout 900s -wait "file:///$$hf"
+      chown -Rf 10000 /nginx /etc/nginx
+      set +x
+      rf
+      while true;do printf "HTTP/1.1 200 OK\nContent-Length: 7\n\nstarted\n"|( nc -l -p 80 || /bin/true);done
+  proxy:
+    <<: [ *env, *restart ]
+    depends_on: [setup]
+    ports:
+    - 80:8443
+    networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.2"}}
+    volumes: [nginx:/nginx, helpers:/helpers, logs:/logs]
+    entrypoint:
+    - /bin/bash
+    - "-exc"
+    - |-
+      export PATH=/helpers:$PATH
+      d=/nginx/deny.conf
+      n=/etc/nginx
+      while ! (dockerize --version; );do echo wdockerize;done
+      dockerize -wait http://setup -timeout 300s
+      touch $$d $$d.prev
+      cp $$d $$d.prev
+      touch $$d $$d.prev
+      sed -i -r\
+        -e "s/([ '])\\\$$(remote_addr|real_ip)/\1\$$real_ip/g" \
+        -e "s/timed_combined;/timed_combined if=\$$method_loggable;/g" \
+        -e "s/listen 8443 ssl;/listen 8443;/g" \
+        -e "s/^(\s*server [{])$$/\1include forcessl.conf;/g" \
+        -e "s/user nginx;/user root;/g" \
+        /etc/nginx/nginx.conf \
+        /etc/nginx/conf.d/*.conf
+      for i in \
+        conf.d/100_f2b.upstream.conf \
+        conf.d/200_nginxsetup.upstream.conf \
+        conf.d/harbor.https.100_f2bactivate.conf \
+        ;do
+        j=$$(echo $$i | sed -re "s/j?frep//g")
+        frep $$n/$$i.frep:$$n/$$j --overwrite;
+      done
+      ( while true;do set +x;
+          if ! ( diff $$d.prev $$d );then
+            echo "New Banned ip, reloading"
+            cp -vf $$d $$d.prev
+            if [ -f /var/run/nginx.pid ];then
+              kill -HUP `cat /var/run/nginx.pid` || /bin/true
+            fi
+          fi
+          sleep $${F2B_TIMER}
+        done; )&
+      exec /usr/sbin/nginx -g "daemon off;"
+
+  postgresql:
+    networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.244"}}
+    env_file: [./common/config/db/env, .env]
+  backup:
+    dns_search: .
+    container_name: backup
+    depends_on: [postgresql, setup]
+    <<: [ *env, *restart ]
+    image: "$HARBOR_BACKUP_IMAGE"
+    networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.5"}}
+    volumes: ["dbs:/var/db_smart_backup"]
+    environment:
+      DBNAMES: "$HARBOR_DB_NAMES"
+      COMP: "$HARBOR_DBS_COMPRESSION"
+      KEEP_LASTS: "$HARBOR_KEEP_DUMPS"
+      KEEP_DAYS: "$HARBOR_KEEP_DUMPS"
+      KEEP_MONTHES: "0"
+      KEEP_WEEKS: "0"
+  logrotate:
+    dns_search: .
+    depends_on: [proxy]
+    container_name: logrotate
+    networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.9"}}
+    image: corpusops/debian-bare
+    volumes:
+    - ./fail2ban:/f2b
+    - logs:/logs
+    <<: [ *env, *restart ]
+    entrypoint:
+    - bash
+    - "-exc"
+    - |-
+      export SUPERVISORD_CONFIGS=cron
+      for i in /c/*frep;do
+      frep $$i:/etc/logrotate.d/$$(basename $$i .frep) --overwrite
+      done
+      exec supervisord.sh
+  fail2ban:
+    dns_search: .
+    networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.12"}}
+    depends_on: [setup]
+    container_name: fail2ban
+    <<: [ *env, *restart ]
+    image: crazymax/fail2ban:latest
+    environment:
+      TZ: "{{harbor_f2b_tz}}"
+      F2B_DB_PURGE_AGE: 30d
+      F2B_LOG_TARGET: /data/fail2ban.log
+      F2B_LOG_LEVEL: "${F2B_LOGLEVEL:-INFO}"
+    volumes:
+    - ./fail2ban:/data
+    - nginx:/nginx
+    - logs:/logs:ro
+volumes:
+  nginx:
+  dbs:
+  helpers:
+  logs:
+  htpasswd:
+# vim: set ft=sls :
