@@ -1,2 +1,6 @@
 # -e git+https://github.com/foo/foo#egg=foo
+requests
+pdbpp
+click
+ipython
 -e .

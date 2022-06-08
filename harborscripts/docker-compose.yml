@@ -1,9 +1,9 @@
 version: "3.8"
 x-bases:
   x-base: &base
-    env_file: [.env, .env.local]
-    env_file: [.env, .env.local]
-    environment:
+    env_file: [../.env, .env, .env.local]
+    environment: &env
+      BASE_IMAGE: "${BASE_IMAGE:-corpusops/ubuntu-bare:20.04}"
       NGINX_REAL_IP_FROM: "10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 ${HARBORSCRIPTS_NETWORK:-172.38.0}.0/12"
 networks: {app_net: {driver: bridge, ipam: {config: [{subnet: "${HARBORSCRIPTS_NETWORK:-172.38.0}.0/24"}], driver: default}}}
 services:
@@ -11,20 +11,22 @@ services:
     <<: [ *base ]
     image: "${DOCKER_IMAGE:-corpusops/harborscripts}"
     environment:
+      <<: [ *env ]
       START_COMMAND: "${START_COMMAND:-sh -c 'while true;do echo sleep;sleep 65534;done'}"
     volumes:
     - "${DATA_FOLDER:-./data}:/w/data"
     - helpers:/helpers:rw
-    env_file: [.env, .env.local]
     networks: {app_net: {ipv4_address: "${HARBORSCRIPTS_NETWORK:-172.38.0}.2"}}
     entrypoint:
     - bash
     - -ec
     - |-
-      /cops_helpers/dockerize -wait http://setup -timeout 60s
+      export PATH=/helpers:$$PATH
+      dockerize -wait http://setup -timeout 60s
       exec docker-entrypoint.sh $$@
   setup:
     <<: [ *base ]
+    image: "${BASE_IMAGE:-corpusops/ubuntu-bare:20.04}"
     entrypoint:
     - bash
     - -ec
@@ -42,7 +44,6 @@ services:
       set +x
       rf
       while true;do printf "HTTP/1.1 200 OK\nContent-Length: 7\n\nstarted\n"|( nc -l -p 80 || /bin/true);done
-    image: corpusops/postgres:13
     networks: {app_net: {ipv4_address: "${HARBORSCRIPTS_NETWORK:-172.38.0}.6"}}
     volumes:
     - helpers:/helpers:rw

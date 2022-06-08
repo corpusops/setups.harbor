@@ -38,6 +38,8 @@ vv cookiecutter --no-input -o "$out" -f "$u" \
     with_db="" \
     with_mailcatcher="" \
     with_node="" \
+    with_docker_git="" \
+    with_githubactions="" \
     node_version="lts/*" \
     git_server="github.com" \
     git_project_server="github.com" \
@@ -45,7 +47,6 @@ vv cookiecutter --no-input -o "$out" -f "$u" \
     git_scheme="https" \
     git_user="" \
     git_project_url="https://github.com/corpusops/harborscripts" \
-    with_githubactions="" \
     out_dir="." \
     docker_registry="" \
     app_type="simplecompose" \

@@ -29,7 +29,7 @@ docker-compose run --rm app bash
 sed "/COMPOSE_FILE/d" .env
 echo COMPOSE_FILE=docker-compose.yml:docker-compose-dev.yml"
 docker-compose up -d --force-recreate
-docker-compose exec -U app bash
+docker-compose exec -u app app bash
 ```
 
 ### run tests

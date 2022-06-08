@@ -21,6 +21,7 @@ RUN set -e \
 
 WORKDIR $USER_HOME
 
+ENV PATH=$USER_HOME/node_modules/.bin:$USER_HOME/bin:$PATH
 
 # install python app
 ARG REQUIREMENTS=requirements/requirements.txt requirements/requirements-dev.txt
@@ -47,6 +48,4 @@ RUN \
   fi \
   && rm -rf /var/lib/apt/lists/* /tmp/install
 # run settings
-ADD --chown=app:app .git/ .git/
-ADD --chown=app:app bin/  bin/
 ENTRYPOINT ["docker-entrypoint.sh"]
