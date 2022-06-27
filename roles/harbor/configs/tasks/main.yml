@@ -15,7 +15,7 @@
   with_filetree: "{{playbook_dir}}/setup/"
   when:
   - "item.state == 'file'"
-  - "not item.path|regex_search('\\.frep$|conf.d')"
+  - "not item.path|regex_search('\\.frep$|conf.d|rclone.*\\.py')"
 - name: Copy files
   copy:
     src: '{{ item.src }}'
@@ -24,7 +24,7 @@
   with_filetree: "{{playbook_dir}}/setup/"
   when:
   - "item.state == 'file'"
-  - "item.path|regex_search('\\.frep$|conf.d')"
+  - "     item.path|regex_search('\\.frep$|conf.d|rclone.*\\.py')"
 - shell: |-
      set -e
      SKIP_PREPARE=1 {{harbor_hostdir}}/wrap_prepare
@@ -35,11 +35,12 @@
   synchronize:
     compress: false
     ssh_args: "{{harbor_sshargs}}"
-    src: "./harborscripts/"
-    dest: "{{harbor_hostdir}}/harborscripts/"
+    src: "./scripts/"
+    dest: "{{harbor_hostdir}}/scripts/"
     rsync_opts: "{{harbor_code_rsync_opts}}"
     set_remote_user: "no"
   tags: [sync_harborscripts]
 - block:
-  - shell: faire integ fail2ban
-  tags: [todo]
+  - shell: "{{harbor_hostdir}}/fix.sh"
+    name: "fix setup (perms & confs)"
+    tags: [fix]

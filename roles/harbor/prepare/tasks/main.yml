@@ -1,10 +1,12 @@
-
+- stat: {dest: "{{harbor_hostdir}}/harbor.yml"}
+  register: harborcfg
 - template:
     src: "setup/{{item}}"
     dest: "{{harbor_hostdir}}/{{item}}"
     trim_blocks: false
     force: true
   loop: [harbor.yml]
+  when: not harborcfg.stat.exists
 
 - template:
     src: "setup/{{item}}"
@@ -12,6 +14,6 @@
     trim_blocks: false
     mode: "0750"
     force: true
-  loop: [wrap_prepare]
+  loop: [wrap_prepare, fix.sh]
 
 - shell: "{{harbor_hostdir}}/wrap_prepare"

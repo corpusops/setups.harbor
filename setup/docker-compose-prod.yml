@@ -6,21 +6,50 @@ x-blocks:
     env_file: [.env]
   restart: &restart
     restart: "$HARBOR_RESTART_POLICY"
+  reg_extra_hosts: &reg_extra_hosts
+    extra_hosts:
+      localhost2: 127.0.0.1
+{%- for i, v in harbor_extra_hosts.items() %}
+      {{i}}: "{{v}}"
+{%- endfor %}
 networks:
   harbor:
     driver: bridge
+    name: "${HARBOR_NETWORK_NAME:-harbor}"
     ipam: {driver: default, config: [{subnet: "${HARBOR_NETWORK}.0/24"}]}
 services:
-  log: {networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.241"}}}
-  registry: {networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.242"}}}
-  registryctl: {networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.243"}}}
-  core: {networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.245"}}}
-  portal: {networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.246"}}}
+  log:
+    # replace stock image to add support for better logrotation and retention
+    image: corpusops/rsyslog
+    networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.241"}}
+    cap_add: [CHOWN, SETGID, SETUID, DAC_OVERRIDE, FOWNER, SETPCAP, KILL]
+    entrypoint:
+    - bash
+    - '-exc'
+    - |-
+      chown -R 10000:10000 /var/log/docker /etc/rsyslog.* /etc/supervisor*
+      echo > /etc/logrotate.d/logrotate.conf
+      exec /bin/supervisord.sh
+  portal: {<<: [ *reg_extra_hosts ], networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.246"}}}
   redis: {networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.247"}}}
-  jobservice: {networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.248"}}}
+  core:
+    image: "{{harbor_images_core}}"
+    <<: [ *reg_extra_hosts ]
+    networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.245"}}
+  registryctl:
+    image: "{{harbor_images_registryctl}}"
+    <<: [ *reg_extra_hosts ]
+    networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.243"}}
+  jobservice:
+    image: "{{harbor_images_jobservice}}"
+    <<: [ *reg_extra_hosts ]
+    networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.248"}}
+  registry:
+    <<: [ *reg_extra_hosts ]
+    networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.242"}}
   setup:
     dns_search: .
-    <<: [ *env, *restart ]
+    <<: [ *env, *restart, *reg_extra_hosts ]
     networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.101"}}
     container_name: setup
     image: "$HARBOR_BACKUP_IMAGE"
@@ -51,32 +80,34 @@ services:
       rf
       while true;do printf "HTTP/1.1 200 OK\nContent-Length: 7\n\nstarted\n"|( nc -l -p 80 || /bin/true);done
   proxy:
-    <<: [ *env, *restart ]
+    <<: [ *env, *restart, *reg_extra_hosts ]
+    # override stock nginx image to add fail2ban, realip and tier SSL offloader load balancer  support
+    # image: harbor_nginx
+    # build: {context: ., dockerfile: Dockerfile.nginx}
     depends_on: [setup]
     ports:
     - 80:8443
     networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.2"}}
     volumes: [nginx:/nginx, helpers:/helpers, logs:/logs]
+    user: "root"
+    cap_add: [DAC_OVERRIDE, FOWNER, SETPCAP, KILL]
+    environment:
+      NGINX_LOGLEVEL: "${NGINX_LOGLEVEL:-info}"
     entrypoint:
     - /bin/bash
     - "-exc"
     - |-
+      exec 2>&1
       export PATH=/helpers:$PATH
+      while ! (dockerize --version; );do echo wdockerize;done
       d=/nginx/deny.conf
       n=/etc/nginx
-      while ! (dockerize --version; );do echo wdockerize;done
+      chmod -R g+rw    /etc/cert $$n /nginx /var/log/nginx
+      chown -Rf :nginx /etc/cert $$n /nginx /var/log/nginx
       dockerize -wait http://setup -timeout 300s
       touch $$d $$d.prev
       cp $$d $$d.prev
       touch $$d $$d.prev
-      sed -i -r\
-        -e "s/([ '])\\\$$(remote_addr|real_ip)/\1\$$real_ip/g" \
-        -e "s/timed_combined;/timed_combined if=\$$method_loggable;/g" \
-        -e "s/listen 8443 ssl;/listen 8443;/g" \
-        -e "s/^(\s*server [{])$$/\1include forcessl.conf;/g" \
-        -e "s/user nginx;/user root;/g" \
-        /etc/nginx/nginx.conf \
-        /etc/nginx/conf.d/*.conf
       for i in \
         conf.d/100_f2b.upstream.conf \
         conf.d/200_nginxsetup.upstream.conf \
@@ -85,18 +116,27 @@ services:
         j=$$(echo $$i | sed -re "s/j?frep//g")
         frep $$n/$$i.frep:$$n/$$j --overwrite;
       done
-      ( while true;do set +x;
+      sed -i -r\
+        -e "s/.*(worker_processes )/error_log syslog:server=log:10514,tag=nginx_error $${NGINX_LOGLEVEL};\\1/g" \
+        -e "s/([ '])\\\$$(remote_addr|real_ip)/\1\$$real_ip/g" \
+        -e "s/access_log[^;]+;/access_log \/dev\/stdout custom_timed_combined if=\$$method_loggable;/g" \
+        -e "s/listen 8443 ssl;/listen 8443;/g" \
+        -e "s/^(\s*server [{])$$/\1include forcessl.conf;/g" \
+        -e "s/user nginx;/user root;/g" \
+        /etc/nginx/nginx.conf \
+        /etc/nginx/conf.d/*.conf
+      ( pidf=/tmp/nginx.pid;while true;do set +x;
           if ! ( diff $$d.prev $$d );then
             echo "New Banned ip, reloading"
             cp -vf $$d $$d.prev
-            if [ -f /var/run/nginx.pid ];then
-              kill -HUP `cat /var/run/nginx.pid` || /bin/true
+            if [ -f $$pidf ];then
+              kill -HUP `cat $$pidf` || /bin/true
             fi
           fi
           sleep $${F2B_TIMER}
         done; )&
-      exec /usr/sbin/nginx -g "daemon off;"
-
+      chown nginx /dev/{stdout,stdin,stderr}
+      exec gosu nginx:nginx sh -exc 'nginx;exec tail -f /dev/stdout'
   postgresql:
     networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.244"}}
     env_file: [./common/config/db/env, .env]
@@ -115,25 +155,25 @@ services:
       KEEP_DAYS: "$HARBOR_KEEP_DUMPS"
       KEEP_MONTHES: "0"
       KEEP_WEEKS: "0"
-  logrotate:
-    dns_search: .
-    depends_on: [proxy]
-    container_name: logrotate
-    networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.9"}}
-    image: corpusops/debian-bare
-    volumes:
-    - ./fail2ban:/f2b
-    - logs:/logs
-    <<: [ *env, *restart ]
-    entrypoint:
-    - bash
-    - "-exc"
-    - |-
-      export SUPERVISORD_CONFIGS=cron
-      for i in /c/*frep;do
-      frep $$i:/etc/logrotate.d/$$(basename $$i .frep) --overwrite
-      done
-      exec supervisord.sh
+  # logrotate:
+  #   dns_search: .
+  #   depends_on: [proxy]
+  #   container_name: logrotate
+  #   networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.9"}}
+  #   image: corpusops/debian-bare
+  #   volumes:
+  #   - ./fail2ban:/f2b
+  #   - logs:/logs
+  #   <<: [ *env, *restart ]
+  #   entrypoint:
+  #   - bash
+  #   - "-exc"
+  #   - |-
+  #     export SUPERVISORD_CONFIGS=cron
+  #     for i in /c/*frep;do
+  #     frep $$i:/etc/logrotate.d/$$(basename $$i .frep) --overwrite
+  #     done
+  #     exec supervisord.sh
   fail2ban:
     dns_search: .
     networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.12"}}
@@ -150,10 +190,47 @@ services:
     - ./fail2ban:/data
     - nginx:/nginx
     - logs:/logs:ro
+{%- if harbor_rclone_conf or harbor_replicate_host %}
+  rclone:
+    <<: [ *env, *restart ]
+    image: harbor_rclone
+    networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.135"}}
+    environment: {SUPERVISORD_CONFIGS: "cron rsyslog"}
+    command:
+    - bash
+    - -exc
+    - |-
+      [[ ! -e /root/.ssh ]] && mkdir /root/.ssh
+      cp -v /w/ssh/* /root/.ssh || true
+      sed -i -r -e "s|(log/syslog).*|\1 /var/log/rclone/replicatestatus.json|g" /etc/logrotate.d/rsyslog
+      find /root/.ssh -type d | xargs chmod -v 700
+      find /root/.ssh -type f | xargs chmod -v 600
+      if [[ -n $${HARBOR_REPLICATE_HOST-} ]];then
+      cat >>/etc/crontabs/root<<EOF
+      $${HARBOR_REPLICATE_PERIODICITY} bash -c "/w/replicate.py"
+      EOF
+      fi
+      if [[ -n $${RCLONE_DEST-} ]];then
+      cat >>/etc/crontabs/root<<EOF
+      $${HARBOR_BACKUP_PERIODICITY} bash -c "/w/rclone.py"
+      EOF
+      fi
+      exec $$(which supervisord.sh)
+    build:
+      context: rclone
+      dockerfile: Dockerfile
+      args: {BASE: "${HARBOR_RCLONE_IMAGE}"}
+    volumes:
+    - ./rclone:/w
+    - rclone-logs:/var/log
+    - dbs:/dbs
+    - "{{harbor_data_volume}}:/ldata:ro"
+{%- endif %}
 volumes:
   nginx:
   dbs:
   helpers:
   logs:
   htpasswd:
+  rclone-logs:
 # vim: set ft=sls :

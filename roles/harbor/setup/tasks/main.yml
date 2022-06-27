@@ -7,3 +7,5 @@
   tags: [configs, harbor_configure]
 - include_role: {name: harbor/service_start}
   tags: [service, harbor_service, harbor_service_start]
+- include_role: {name: harbor/post}
+  tags: [post]

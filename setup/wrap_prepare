@@ -9,4 +9,7 @@ if [ -e docker-compose.yml ];then
   -e "s/ ( - (80:8080))/#\1/g" \
   docker-compose.yml
 fi
+for i in ./fix.sh;do
+    if [ -e "$i" ];then "$i";fi
+done
 # vim:set et sts=4 ts=4 tw=0:

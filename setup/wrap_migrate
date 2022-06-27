@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -ex
+cd $(dirname $(readlink -f "$0"))
+if [ ! -e common/config/jobservice/env ];then
+    echo "no existing conf, bailing out"
+    exit 0
+fi
+if [[ -z ${SKIP_MIGRATE-} ]];then
+    docker run --rm -v $(pwd):/hostfs \
+        {{harbor_images_migrate}} migrate -i /harbor.yml
+fi
+if [ -e docker-compose.yml ];then
+  sed -i -r \
+  -e "s/ ( - (80:8080))/#\1/g" \
+  docker-compose.yml
+fi
+# vim:set et sts=4 ts=4 tw=0:

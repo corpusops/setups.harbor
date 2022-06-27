@@ -1,32 +1,36 @@
 ---
+harbor_extra_hosts: {}
 harbor_cert_key: "{{harbor_data_volume}}/key.pem"
 harbor_cert: "{{harbor_data_volume}}/cert.pem"
-harbor_data_volume: "/srv/docker/harbor/data"
-harbor_hostdir: /srv/docker/harbor/current
-harbor_versioned_hostdir: "/srv/docker/harbor/{{harbor_version}}"
+harbor_basedir: /srv/docker/harbor
+harbor_data_volume: "{{harbor_basedir}}/data"
+harbor_hostdir: "{{harbor_basedir}}/current"
+harbor_versioned_hostdir: "{{harbor_basedir}}/{{harbor_version}}"
 harbor_volumes:
 - "{{harbor_hostdir}}"
-harbor_pre_version: '{{harbor_pre_versions[harbor_version]|default("{0}.{1}".format(
-  harbor_version[:1],
-  (((harbor_version[2:]|float)-0.1)|string)))}}'
-harbor_version: 2.3.1
-harbor_pre_versions:
-  2.3.0: 2.2.9
-harbor_installer_url: "https://github.com/goharbor/harbor/releases/download/v2.3.1/harbor-online-installer-v{{harbor_version}}.tgz"
+harbor_cfg_version: "{% set p = harbor_version.split('.') %}{% set v = '{p[0]}.{p[1]}.0'.format(p=p) %}{{v}}"
+harbor_vversion: "v{{harbor_version}}"
+harbor_version: 2.4.0
+harbor_installer_url: "https://github.com/goharbor/harbor/releases/download/{{harbor_vversion}}/harbor-online-installer-v{{harbor_version}}.tgz"
 harbor_installer_dir: "{{harbor_versioned_hostdir}}/installer"
 harbor_image: "vaultwarden/server:1.21.0"
-harbor_install_args: "--with-notary --with-chartmuseum"
+harbor_with_notary: false
+harbor_with_chart: true
+harbor_install_args: "{% if harbor_with_notary%} --with-notary{%endif %}{% if harbor_with_chart%} --with-chartmuseum{%endif%}"
 harbor_network: 172.34.0
 harbor_chart_url: disabled
 harbor_domain: harbor.foo.net
 harbor_github_token: null
+harbor_prepare: true
+harbor_migrate: true
 harbor_password: xxxtR7487913189781az
 harbor_db_password: xxxtR0xN0eQ9oP1tQ2w
 #
 harbor_pg: "13"
 harbor_backup_image: corpusops/dbsmartbackup:postgres-{{harbor_pg}}
+harbor_rclone_image: "postgres:{{harbor_pg}}-alpine"
 harbor_xforwarded: true
-harbor_compose_project: "{{harbor_hostdir|copsf_basename}}"
+harbor_compose_project: "{{harbor_basedir|copsf_basename}}"
 harbor_ip: 127.0.0.1
 harbor_f2b_ports: "{{harbor_public_http_port}},{{harbor_public_https_port}} "
 harbor_public_http_port: 80
@@ -42,14 +46,15 @@ harbor_db_user: postgres
 harbor_riot_theme:  dark
 harbor_compose_files: [docker-compose.yml, docker-compose-prod.yml]
 harbor_dbs_compression: nocomp
-harbor_docker_dot_env: |-
-  # ansible managed
-  HARBOR_NETWORK={{harbor_network}}
-  NGINX_REAL_IP_FROM={{harbor_real_ip_from}}
-  COMPOSE_PROJECT_NAME={{harbor_compose_project}}
-  CONTROL_COMPOSE_FILES={{harbor_compose_files|join(' ')}}
-  COMPOSE_FILE={{harbor_compose_files|join(':')}}
-  DATA_FOLDER=/data
+harbor_docker_dot_env: "{{harbor_docker_dot_env_default}}"
+harbor_harborscripts_dotenv: "{{harbor_harborscripts_dotenv_default}}"
+harbor_backup_disabled:  true
+harbor_replication_disabled:  true
+harbor_docker_dot_env_common_default: |-
+  DOCKER_BUILDKIT=1
+  COMPOSE_DOCKER_CLI_BUILD=1
+  BUILDKIT_PROGRESS=plain
+  BUILDKIT_INLINE_CACHE=1
   DATABASE_URL=postgresql://{{harbor_db_user}}:{{harbor_db_password}}@{{harbor_db_host}}:{{harbor_db_port}}/{{harbor_db_name}}
   POSTGRES_USER={{harbor_db_user}}
   POSTGRES_PASSWORD={{harbor_db_password}}
@@ -58,9 +63,22 @@ harbor_docker_dot_env: |-
   POSTGRES_DB={{harbor_db_name}}
   PGPASSWD={{harbor_db_password}}
   PGPASSWORD={{harbor_db_password}}
+  HARBOR_NETWORK={{harbor_network}}
+  HARBORSCRIPTS_NETWORK={{harbor_network}}
+  HARBOR_VERSION={{harbor_version}}
+harbor_docker_dot_env_default: |-
+  # ansible managed
+  {{harbor_docker_dot_env_common_default}}
+  #
+  COMPOSE_PROJECT_NAME={{harbor_compose_project}}
+  CONTROL_COMPOSE_FILES={{harbor_compose_files|join(' ')}}
+  COMPOSE_FILE={{harbor_compose_files|join(':')}}
+  NGINX_REAL_IP_FROM={{harbor_real_ip_from}}
+  DATA_FOLDER=/data
   HARBOR_DBS_COMPRESSION={{harbor_dbs_compression}}
   HARBOR_KEEP_DUMPS={{harbor_keep_dumps}}
   HARBOR_BACKUP_IMAGE={{harbor_backup_image}}
+  HARBOR_RCLONE_IMAGE={{harbor_rclone_image}}
   HARBOR_DB_NAMES=all
   F2B_LOG_LEVEL={{harbor_f2b_loglevel}}
   LOG_FILE={{harbor_log_file}}
@@ -75,11 +93,34 @@ harbor_docker_dot_env: |-
   SMTP_EXPLICIT_TLS={{harbor_smtp_explicit_tls}}
   SMTP_USERNAME={{harbor_smtp_username}}
   SMTP_PASSWORD={{harbor_smtp_password}}
-  {% endif %}
   SMTP_TIMEOUT={{harbor_smtp_timeout}}
+  {% endif %}
   HARBOR_INVITE_DRYRUN={{harbor_invite_dryrun}}
   HARBOR_INVITE_MAIL_NOTIFY={{harbor_invite_mail_notify}}
   HARBOR_RESTART_POLICY={{harbor_restart_policy}}
+  #
+  HARBOR_BACKUP_DISABLED={{harbor_backup_disabled and '1' or '0'}}
+  HARBOR_BACKUP_PERIODICITY={{harbor_backup_periodicity}}
+  #
+  HARBOR_REPLICATION_DISABLED={{harbor_replication_disabled and '1' or '0'}}
+  HARBOR_USERNAME={{harbor_admin_user}}
+  HARBOR_PASSWORD={{harbor_password}}
+  HARBOR_REPLICATE_PERIODICITY={{harbor_replicate_periodicity}}
+  HARBOR_REPLICATE_HOST={{harbor_replicate_host}}
+  HARBOR_REPLICATE_URL={{harbor_replicate_url}}
+  HARBOR_REPLICATE_SSH_HOST=ssh-replicate
+  HARBOR_REPLICATE_HOST_PATH={{harbor_replicate_host_path}}
+  HARBOR_REPLICATE_HOST_PATH_ORIG={{harbor_replicate_host_path_orig}}
+  HARBOR_REPLICATE_LOCAL_DATA_PATH={{harbor_data_volume}}
+harbor_harborscripts_dotenv_default: |-
+  # ansible managed
+  {{harbor_docker_dot_env_common_default}}
+  #
+  USER_UID={{harbor_harborscripts_uid}}
+  USER_GID={{harbor_harborscripts_gid}}
+  COMPOSE_FILE={{harbor_harborscripts_dc|join(":")}}
+  DATA_FOLDER={{harbor_data_volume}}/scripts
+harbor_admin_user: admin
 harbor_invite_dryrun: "1"
 harbor_invite_mail_notify: "1"
 # https://github.com/harbor/jslib/issues/52
@@ -146,3 +187,65 @@ harbor_sshargs: >-
   {% if user %}-l {{user}}{% endif %}
   {% endif %}
 harbor_code_rsync_opts: ["-aAHzv"]
+harbor_harborscripts_dc: [docker-compose.yml, docker-compose-dev.yml]
+harbor_harborscripts_uid: "0"
+harbor_harborscripts_gid: "0"
+harbor_images_ns: goharbor
+harbor_images_core:        "{{harbor_images_ns}}/harbor-core:{{harbor_vversion}}"
+harbor_images_jobservice:  "{{harbor_images_ns}}/harbor-jobservice:{{harbor_vversion}}"
+harbor_images_registryctl: "{{harbor_images_ns}}/harbor-registryctl:{{harbor_vversion}}"
+harbor_images_migrate: "{{harbor_images_ns}}/prepare:{{harbor_vversion}}"
+harbor_storage_conf: |
+  # Harbor Storage settings by default is using /data dir on local filesystem
+  # Uncomment storage_service setting If you want to using external storage
+  # storage_service:
+  #   # ca_bundle is the path to the custom root ca certificate, which will be injected into the truststore
+  #   # of registry's and chart repository's containers.  This is usually needed when the user hosts a internal storage with self signed certificate.
+  #   ca_bundle:
+
+harbor_objectstorage_prefix: /registry/
+harbor_rclone_conf: |-
+    # uri to use: $rclone_remote/bucket_name/path
+    # [src]
+    # type = s3
+    # provider = Other
+    # env_auth = false
+    # secret_access_key = xxxx
+    # access_key_id = xxxx
+    # region = gra
+    # endpoint = https://s3.gra.cloud.ovh.net
+    # [backup]
+    # type = s3
+    # provider = Other
+    # env_auth = false
+    # secret_access_key = xxxx
+    # access_key_id = xxxx
+    # region = bhs
+    # endpoint = https://s3.bhs.cloud.ovh.net
+harbor_replicate_ssh_key: ""
+harbor_replicate_host_path: "{{harbor_hostdir}}"
+harbor_replicate_host_path_orig: "{{harbor_replicate_host_path}}"
+harbor_replicate_ssh_pub: ""
+harbor_replicate_host: ""
+harbor_replicate_url: "https://{{harbor_replicate_host}}"
+harbor_replicate_port: 22
+harbor_replicate_user: root
+harbor_replicate_ssh_config: |-
+  Host *
+  UserKnownHostsFile /dev/null
+  ConnectTimeout 0
+  HashKnownHosts yes
+  StrictHostKeyChecking no
+  SendEnv LANG: LC_*
+  AddressFamily any
+  IdentitiesOnly Yes
+  IdentityFile /root/.ssh/key
+  #
+  Host ssh-replicate
+  Hostname {{harbor_replicate_host}}
+  User {{harbor_replicate_user}}
+  Port {{harbor_replicate_port}}
+harbor_backup_periodicity: "0 0 * * 1,3,5"
+harbor_replicate_periodicity: "0,30 * * * *"
+
+

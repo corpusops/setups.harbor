@@ -1,0 +1,10 @@
+# syntax=docker/dockerfile:1.3
+ARG HARBOR_VERSION=2.4.0
+FROM goharbor/nginx-photon:v${HARBOR_VERSION} AS final
+FROM corpusops/nginx
+USER root
+RUN apt-get update && apt-get install -yqq rsync
+RUN --mount=type=bind,from=final,target=/s bash -exc ': \
+  && for i in /etc/nginx/;do rsync -aAH --numeric-ids /s${i} ${i};done \
+  '
+USER nginx
