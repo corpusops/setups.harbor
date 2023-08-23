@@ -105,7 +105,8 @@ set -e
 ssh -ttt {replicate_host} bash<<EOF
 set -e
 cd "{replicate_host_path}/scripts"
-docker-compose run --rm harborscripts src/harbor_toggle_replications.py --toggle=0
+docker-compose up -d --no-deps harborscripts
+docker-compose exec -T harborscripts src/harbor_toggle_replications.py --toggle=0
 EOF
 '''
 dt = datetime.datetime.now()
