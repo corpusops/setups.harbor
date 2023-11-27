@@ -9,4 +9,4 @@
 - shell: "{{harbor_hostdir}}/wrap_migrate"
   register: migrate_run
   failed_when:
-  - migrate_run.rc != 0 and ('.MigratioNotFound' not in migrate_run.stderr)
+  - migrate_run.rc != 0 and ('.MigrationNotFound' not in migrate_run.stderr)

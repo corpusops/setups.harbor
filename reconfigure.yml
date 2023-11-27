@@ -1,0 +1,5 @@
+- hosts: "{{harbor_servers|default('harbor_servers')}}"
+  tasks:
+  - {include_role: {name: "harbor/vars", public: y}}
+  - {include_role: {name: "harbor/layout"}}
+  - {include_role: {name: "harbor/configs"}}

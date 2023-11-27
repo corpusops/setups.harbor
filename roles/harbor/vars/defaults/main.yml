@@ -10,7 +10,7 @@ harbor_volumes:
 - "{{harbor_hostdir}}"
 harbor_cfg_version: "{% set p = harbor_version.split('.') %}{% set v = '{p[0]}.{p[1]}.0'.format(p=p) %}{{v}}"
 harbor_vversion: "v{{harbor_version}}"
-harbor_version: 2.4.0
+harbor_version: 2.6.1
 harbor_installer_url: "https://github.com/goharbor/harbor/releases/download/{{harbor_vversion}}/harbor-online-installer-v{{harbor_version}}.tgz"
 harbor_installer_dir: "{{harbor_versioned_hostdir}}/installer"
 harbor_image: "vaultwarden/server:1.21.0"
@@ -48,9 +48,11 @@ harbor_compose_files: [docker-compose.yml, docker-compose-prod.yml]
 harbor_dbs_compression: nocomp
 harbor_docker_dot_env: "{{harbor_docker_dot_env_default}}"
 harbor_harborscripts_dotenv: "{{harbor_harborscripts_dotenv_default}}"
-harbor_backup_disabled:  true
-harbor_replication_disabled:  true
-harbor_docker_dot_env_common_default: |-
+harbor_skip_migrate: ""
+harbor_skip_prepare: ""
+harbor_docker_dot_env_common_default: |
+  SKIP_MIGRATE={{harbor_skip_migrate and '1' or ''}}
+  SKIP_PREPARE={{harbor_skip_prepare and '1' or ''}}
   DOCKER_BUILDKIT=1
   COMPOSE_DOCKER_CLI_BUILD=1
   BUILDKIT_PROGRESS=plain
@@ -99,19 +101,60 @@ harbor_docker_dot_env_default: |-
   HARBOR_INVITE_MAIL_NOTIFY={{harbor_invite_mail_notify}}
   HARBOR_RESTART_POLICY={{harbor_restart_policy}}
   #
-  HARBOR_BACKUP_DISABLED={{harbor_backup_disabled and '1' or '0'}}
   HARBOR_BACKUP_PERIODICITY={{harbor_backup_periodicity}}
   #
-  HARBOR_REPLICATION_DISABLED={{harbor_replication_disabled and '1' or '0'}}
   HARBOR_USERNAME={{harbor_admin_user}}
   HARBOR_PASSWORD={{harbor_password}}
+  #
+  RCLONE_REMOTE_SRC=src
+  RCLONE_REMOTE=backup
+  RCLONE_SRC={{harbor_prod_aws_bucket}}
+  RCLONE_DEST={{harbor_backup_aws_bucket}}
+  #
   HARBOR_REPLICATE_PERIODICITY={{harbor_replicate_periodicity}}
-  HARBOR_REPLICATE_HOST={{harbor_replicate_host}}
-  HARBOR_REPLICATE_URL={{harbor_replicate_url}}
-  HARBOR_REPLICATE_SSH_HOST=ssh-replicate
-  HARBOR_REPLICATE_HOST_PATH={{harbor_replicate_host_path}}
   HARBOR_REPLICATE_HOST_PATH_ORIG={{harbor_replicate_host_path_orig}}
-  HARBOR_REPLICATE_LOCAL_DATA_PATH={{harbor_data_volume}}
+  {{harbor_rclone_staging_common_env}}
+  {{harbor_rclone_failover_common_env}}
+harbor_rclone_failover_common_env: |-
+  #
+  {% if harbor_has_failover %}
+  RCLONE_FAILOVER_REPLICATE={{harbor_replicate_aws_bucket}}
+  RCLONE_FAILOVER_REMOTE_REPLICATE=failover
+  HARBOR_FAILOVER_REPLICATE_SSH_HOST=ssh-replicate
+  HARBOR_FAILOVER_REPLICATE_HOST={{harbor_replicate_host}}
+  HARBOR_FAILOVER_REPLICATE_PORT={{harbor_replicate_port}}
+  HARBOR_FAILOVER_REPLICATE_URL={{harbor_replicate_url}}
+  HARBOR_FAILOVER_REPLICATE_HOST_PATH={{harbor_replicate_host_path}}
+  HARBOR_FAILOVER_REPLICATE_LOCAL_DATA_PATH={{harbor_data_volume}}
+  {% endif %}
+  #
+harbor_rclone_staging_common_env: |-
+  #
+  {% if harbor_has_staging %}
+  RCLONE_STAGING_REPLICATE={{harbor_staging_aws_bucket}}
+  RCLONE_STAGING_REMOTE_REPLICATE=staging
+  HARBOR_STAGING_REPLICATE_SSH_HOST=ssh-staging
+  HARBOR_STAGING_REPLICATE_HOST={{harbor_staging_host}}
+  HARBOR_STAGING_REPLICATE_PORT={{harbor_staging_port}}
+  HARBOR_STAGING_REPLICATE_URL={{harbor_staging_url}}
+  HARBOR_STAGING_REPLICATE_HOST_PATH={{harbor_replicate_host_path}}
+  HARBOR_STAGING_REPLICATE_LOCAL_DATA_PATH={{harbor_data_volume}}
+  {% endif %}
+  #
+# chgose io your inventory settings which one to use, see below
+harbor_rclone_env: ""
+harbor_staging_prod_ssh_port: 22
+harbor_staging_prod_host: "{{inventory_hostname}}pp"
+harbor_staging_sync_prod_path: "{{harbor_staging_prod_host}}:/var/lib/lxc/{{groups['harbor_prod'][0]}}"
+harbor_rclone_prod_env: |-
+    HARBOR_REPLICATION_DISABLED={{harbor_has_failover and '0' or '1'}}
+    HARBOR_BACKUP_DISABLED={{harbor_has_backup and '0' or '1'}}
+harbor_rclone_fallback_env: |-
+    HARBOR_REPLICATION_DISABLED=1
+    HARBOR_BACKUP_DISABLED=1
+harbor_rclone_staging_env: |-
+    HARBOR_REPLICATION_DISABLED=1
+    HARBOR_BACKUP_DISABLED=1
 harbor_harborscripts_dotenv_default: |-
   # ansible managed
   {{harbor_docker_dot_env_common_default}}
@@ -120,6 +163,9 @@ harbor_harborscripts_dotenv_default: |-
   USER_GID={{harbor_harborscripts_gid}}
   COMPOSE_FILE={{harbor_harborscripts_dc|join(":")}}
   DATA_FOLDER={{harbor_data_volume}}/scripts
+harbor_has_failover: true
+harbor_has_staging: true
+harbor_has_backup: true
 harbor_admin_user: admin
 harbor_invite_dryrun: "1"
 harbor_invite_mail_notify: "1"
@@ -202,26 +248,25 @@ harbor_storage_conf: |
   #   # ca_bundle is the path to the custom root ca certificate, which will be injected into the truststore
   #   # of registry's and chart repository's containers.  This is usually needed when the user hosts a internal storage with self signed certificate.
   #   ca_bundle:
-
+  {% if harbor_aws_bucket %}
+  storage_service:
+    s3:
+      regionendpoint: "{{harbor_aws_endpoint}}"
+      accesskey: "{{harbor_aws_access}}"
+      secretkey: "{{harbor_aws_secret}}"
+      region: "{{harbor_aws_region}}"
+      bucket: "{{harbor_aws_bucket}}"
+      secure: true
+      v4auth: true
+      chunksize: {{harbor_chunksize}}
+      multipartcopychunksize: {{harbor_chunksize}}
+      multipartcopythresholdsize: {{harbor_chunksize}}
+      rootdirectory: "/registry/"
+      encrypt: false
+      #keyid: mykeyid
+  {% endif %}
+harbor_chunksize: "4073741824"
 harbor_objectstorage_prefix: /registry/
-harbor_rclone_conf: |-
-    # uri to use: $rclone_remote/bucket_name/path
-    # [src]
-    # type = s3
-    # provider = Other
-    # env_auth = false
-    # secret_access_key = xxxx
-    # access_key_id = xxxx
-    # region = gra
-    # endpoint = https://s3.gra.cloud.ovh.net
-    # [backup]
-    # type = s3
-    # provider = Other
-    # env_auth = false
-    # secret_access_key = xxxx
-    # access_key_id = xxxx
-    # region = bhs
-    # endpoint = https://s3.bhs.cloud.ovh.net
 harbor_replicate_ssh_key: ""
 harbor_replicate_host_path: "{{harbor_hostdir}}"
 harbor_replicate_host_path_orig: "{{harbor_replicate_host_path}}"
@@ -230,6 +275,41 @@ harbor_replicate_host: ""
 harbor_replicate_url: "https://{{harbor_replicate_host}}"
 harbor_replicate_port: 22
 harbor_replicate_user: root
+harbor_staging_host: ""
+harbor_staging_url: "https://{{harbor_staging_host}}"
+harbor_staging_port: 22
+harbor_staging_user: root
+#
+harbor_aws_access: ""
+harbor_aws_secret: ""
+harbor_aws_region: ""
+harbor_aws_endpoint: ""
+harbor_aws_bucket: ""
+#
+harbor_prod_aws_access: ""
+harbor_prod_aws_secret: ""
+harbor_prod_aws_region: ""
+harbor_prod_aws_endpoint: "https://s3.XXX.cloud.ovh.net"
+harbor_prod_aws_bucket: ""
+#
+harbor_backup_aws_access: ""
+harbor_backup_aws_secret: ""
+harbor_backup_aws_region: ""
+harbor_backup_aws_endpoint: "https://s3.XXX.cloud.ovh.net"
+harbor_backup_aws_bucket: ""
+#
+harbor_replicate_aws_access: ""
+harbor_replicate_aws_secret: ""
+harbor_replicate_aws_region: ""
+harbor_replicate_aws_endpoint: "https://s3.XXX.cloud.ovh.net"
+harbor_replicate_aws_bucket: ""
+#
+harbor_staging_aws_access: ""
+harbor_staging_aws_secret: ""
+harbor_staging_aws_region: ""
+harbor_staging_aws_endpoint: "https://s3.XXX.cloud.ovh.net"
+harbor_staging_aws_bucket: ""
+#
 harbor_replicate_ssh_config: |-
   Host *
   UserKnownHostsFile /dev/null
@@ -241,11 +321,52 @@ harbor_replicate_ssh_config: |-
   IdentitiesOnly Yes
   IdentityFile /root/.ssh/key
   #
+  Host ssh-staging
+  Hostname {{harbor_staging_host}}
+  User {{harbor_staging_user}}
+  Port {{harbor_staging_port}}
+  #
   Host ssh-replicate
   Hostname {{harbor_replicate_host}}
   User {{harbor_replicate_user}}
   Port {{harbor_replicate_port}}
 harbor_backup_periodicity: "0 0 * * 1,3,5"
 harbor_replicate_periodicity: "0,30 * * * *"
-
+harbor_rclone_conf: |-
+    # uri to use: $rclone_remote/bucket_name/path
+    [src]
+    type = s3
+    provider = Other
+    env_auth = false
+    secret_access_key = {{harbor_prod_aws_secret}}
+    access_key_id = {{harbor_prod_aws_access}}
+    region = {{harbor_prod_aws_region}}
+    endpoint = {{harbor_prod_aws_endpoint}}
+    #
+    [staging]
+    type = s3
+    provider = Other
+    env_auth = false
+    secret_access_key = {{harbor_staging_aws_secret}}
+    access_key_id = {{harbor_staging_aws_access}}
+    region = {{harbor_staging_aws_region}}
+    endpoint = {{harbor_staging_aws_endpoint}}
+    #
+    [failover]
+    type = s3
+    provider = Other
+    env_auth = false
+    secret_access_key = {{harbor_replicate_aws_secret}}
+    access_key_id = {{harbor_replicate_aws_access}}
+    region = {{harbor_replicate_aws_region}}
+    endpoint = {{harbor_replicate_aws_endpoint}}
+    #
+    [backup]
+    type = s3
+    provider = Other
+    env_auth = false
+    secret_access_key = {{harbor_backup_aws_secret}}
+    access_key_id = {{harbor_backup_aws_access}}
+    region = {{harbor_backup_aws_region}}
+    endpoint = {{harbor_backup_aws_endpoint}}
 

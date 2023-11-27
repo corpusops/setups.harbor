@@ -1,0 +1,12 @@
+---
+- hosts: ["all"]
+  tasks:
+  - include_role: {name: "harbor/vars", public: y}
+  - include_role: {name: "harbor/layout", public: y}
+    tags: [layout]
+  - include_role: {name: "harbor/download_installer", public: y}
+    tags: [download_installer]
+  - include_role: {name: "harbor/prepare", public: y}
+    tags: [prepare]
+  - include_role: {name: "harbor/migrate", public: y}
+    tags: [migrate]

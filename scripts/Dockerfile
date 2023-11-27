@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.3
 FROM corpusops/ubuntu-bare:20.04
 WORKDIR /tmp/install
 ARG DEV_DEPENDENCIES_PATTERN='^#\s*dev dependencies' \
@@ -19,22 +20,27 @@ RUN set -e \
   && printf "$USER_NAME ALL=(ALL) NOPASSWD:ALL\n">/etc/sudoers.d/app \
   && : end
 
-WORKDIR $USER_HOME
 
 ENV PATH=$USER_HOME/node_modules/.bin:$USER_HOME/bin:$PATH
 
 # install python app
-ARG REQUIREMENTS=requirements/requirements.txt requirements/requirements-dev.txt
-ENV REQUIREMENTS=$REQUIREMENTS
+WORKDIR $USER_HOME
+# See https://github.com/pypa/setuptools/issues/3301
+# ARG PIP_REQ=>=22 SETUPTOOLS_REQ=<60 \
+ARG PIP_REQ=>=22 SETUPTOOLS_REQ>=60 \
+    REQUIREMENTS=requirements/requirements.txt requirements/requirements-dev.txt
+ENV REQUIREMENTS=$REQUIREMENTS PIP_REQ=$PIP_REQ SETUPTOOLS_REQ=$SETUPTOOLS_REQ
 ADD --chown=app:app lib/ lib/
 ADD --chown=app:app src/ src/
 ADD --chown=app:app *.py *txt *md *in ./
-ADD --chown=app:app requirements/requirement*txt requirements/
+RUN mkdir requirements
+ADD --chown=app:app requirements/requirement* requirements/
 RUN bash -c 'set -e \
   && for i in / /usr /usr/local;do \
   ln -fsv $(which python${PY_VER}) $i/bin/python;done \
   && python <(curl https://bootstrap.pypa.io/get-pip.py) \
-  && python -m pip install --no-cache -r <( cat $REQUIREMENTS ) \
+  && pip install --upgrade pip${PIP_REQ} setuptools${SETUPTOOLS_REQ} \
+  && SETUPTOOLS_USE_DISTUTILS=stdlib python -m pip install --no-cache -r <( cat $REQUIREMENTS ) \
   && chown -Rf $USER_NAME .'
 
 # final cleanup
@@ -48,6 +54,7 @@ RUN \
   fi \
   && rm -rf /var/lib/apt/lists/* /tmp/install
 # run settings
-ADD --chown=app:app bin/ bin/
+ADD --chown=app:app .git/ .git/
+ADD --chown=app:app bin/  bin/
 CMD []
 ENTRYPOINT ["docker-entrypoint.sh"]

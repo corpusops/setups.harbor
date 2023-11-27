@@ -52,7 +52,6 @@ data_volume: {{harbor_data_volume}}
 #   # ca_bundle is the path to the custom root ca certificate, which will be injected into the truststore
 #   # of registry's and chart repository's containers.  This is usually needed when the user hosts a internal storage with self signed certificate.
 #   ca_bundle:
-{{ harbor_storage_conf}}
 
 #   # storage backend, default is filesystem, options include filesystem, azure, gcs, s3, swift and oss
 #   # for more info about this configuration please refer https://docs.docker.com/registry/configuration/
@@ -61,6 +60,7 @@ data_volume: {{harbor_data_volume}}
 #   # set disable to true when you want to disable registry redirect
 #   redirect:
 #     disabled: false
+{{ harbor_storage_conf}}
 
 # Trivy configuration
 #
@@ -78,6 +78,16 @@ trivy:
   # If the flag is enabled you have to download the `trivy-offline.tar.gz` archive manually, extract `trivy.db` and
   # `metadata.json` files and mount them in the `/home/scanner/.cache/trivy/db` path.
   skip_update: false
+  #
+  # The offline_scan option prevents Trivy from sending API requests to identify dependencies.
+  # Scanning JAR files and pom.xml may require Internet access for better detection, but this option tries to avoid it.
+  # For example, the offline mode will not try to resolve transitive dependencies in pom.xml when the dependency doesn't
+  # exist in the local repositories. It means a number of detected vulnerabilities might be fewer in offline mode.
+  # It would work if all the dependencies are in local.
+  # This option doesn’t affect DB download. You need to specify "skip-update" as well as "offline-scan" in an air-gapped environment.
+  offline_scan: false
+  # timeout The duration to wait for scan completion
+  timeout: 5m0s
   #
   # insecure The flag to skip verifying registry certificate
   insecure: false
@@ -123,6 +133,14 @@ log:
     rotate_size: {{harbor_rotate_size}}
     # The directory on your host that store log
     location: "{{harbor_logs_dir}}"
+    # Uncomment following lines to enable external syslog endpoint.
+    external_endpoint:
+      # protocol used to transmit log to external endpoint, options is tcp or udp
+      protocol: tcp
+      # The host of external endpoint
+      host: log
+      # Port of external endpoint
+      port: 10514
 
   # Uncomment following lines to enable external syslog endpoint.
   # external_endpoint:
@@ -169,7 +187,7 @@ _version: {{harbor_cfg_version}}
 #   # host for redis+sentinel:
 #   #  <host_sentinel1>:<port_sentinel1>,<host_sentinel2>:<port_sentinel2>,<host_sentinel3>:<port_sentinel3>
 #   host: redis:6379
-#   password:
+#   password: 
 #   # sentinel_master_set must be set to support redis+sentinel
 #   #sentinel_master_set:
 #   # db_index 0 is for core, it's unchangeable
@@ -234,3 +252,26 @@ proxy:
 #   #   insecure: true
 #   #   timeout: 10s
 
+# enable purge _upload directories
+upload_purging:
+  enabled: true
+  # remove files in _upload directories which exist for a period of time, default is one week.
+  age: 168h
+  # the interval of the purge operations
+  interval: 24h
+  dryrun: false
+
+# cache layer configurations
+# If this feature enabled, harbor will cache the resource
+# `project/project_metadata/repository/artifact/manifest` in the redis
+# which can especially help to improve the performance of high concurrent
+# manifest pulling.
+# NOTICE
+# If you are deploying Harbor in HA mode, make sure that all the harbor
+# instances have the same behaviour, all with caching enabled or disabled,
+# otherwise it can lead to potential data inconsistency.
+cache:
+  # not enabled by default
+  enabled: false
+  # keep cache for one day by default
+  expire_hours: 24

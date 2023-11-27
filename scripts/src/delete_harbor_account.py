@@ -14,7 +14,6 @@ from harbor_utils import (
     as_bool,
     setup_logging,
     notify_access,
-    get_or_create_user,
     harbor_api,
     get_harbor_batched as get_batched,
     get_harbor_data,

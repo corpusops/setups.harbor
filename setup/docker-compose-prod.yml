@@ -29,6 +29,7 @@ services:
     - |-
       chown -R 10000:10000 /var/log/docker /etc/rsyslog.* /etc/supervisor*
       echo > /etc/logrotate.d/logrotate.conf
+      echo > /etc/rsyslog.d/rsyslog_docker.conf
       exec /bin/supervisord.sh
   portal: {<<: [ *reg_extra_hosts ], networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.246"}}}
   redis: {networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.247"}}}
@@ -225,6 +226,11 @@ services:
     - rclone-logs:/var/log
     - dbs:/dbs
     - "{{harbor_data_volume}}:/ldata:ro"
+{%- endif %}
+{%- if harbor_with_chart and harbor_version is version('2.6.1', '>=')%}
+  chartmuseum:
+    <<: [ *env, *restart ]
+    networks: {harbor: {ipv4_address: "${HARBOR_NETWORK}.136"}}
 {%- endif %}
 volumes:
   nginx:

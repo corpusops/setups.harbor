@@ -1,0 +1,70 @@
+---
+- hosts: ["harbor_baremetals_staging"]
+  tags: [reset_lxc]
+  tasks:
+  - {include_role: {name: "harbor/vars", public: y}}
+  - set_fact: {staging_path: "/var/lib/lxc/{{groups['harbor_staging'][0]}}"}
+  - tags: [reset_lxc_gen]
+    copy:
+      content: |-
+        #!/usr/bin/env bash
+        set -ex
+        {% set h = groups['harbor_staging'][0]   %}
+        {% set o = groups['harbor_prod'][0] %}
+        {% set hn = h.split('.')[0] %}
+        {% set on = o.split('.')[0] %}
+        {% set hvars = hostvars[h] %}
+        lxc-stop -k -n {{h}} || true
+        rsync -aAHv --delete --delete-excluded "--exclude=var/log/journal/*" "--exclude=var/log/harbor/*" "--exclude=harbor_rclone-logs/_data/*" -e "ssh -p {{harbor_staging_prod_ssh_port}}" --numeric-ids {{harbor_staging_sync_prod_path}}/ {{staging_path}}/
+        cd "{{staging_path}}"
+        sed -i -re "s/{{on}}/{{hn}}/g" \
+          *conf *sh config sshkeys/* tmp/* \
+          bin/* rootfs/etc/hosts* rootfs/etc/hostname rootfs/etc/mailname \
+          rootfs/etc/postfix/virtual_alias_maps \
+          rootfs/etc/aliases rootfs/etc/postfix/relay_domains
+        postmap rootfs/etc/postfix/virtual_alias_maps
+        postmap rootfs/etc/postfix/relay_domains
+        sed -i -r \
+          -e "s/always/no/g" \
+          rootfs/var/lib/docker/containers/*/hostconfig.json
+        sed -i -r \
+        -e "s/^      addresses: \[[0-9]+\.[0-9+]\.[0-9]+\.[0-9]+/      addresses: [{{hvars.local_ip}}/g" \
+        -e "s/(to: [0-9]+\.[0-9]+\.[0-9]+\.1\/32), via: [0-9]+\.[0-9]+\.[0-9]+\.[0-9+]/\1, via: {{hvars.local_ip}}/g" \
+        tmp/* rootfs/etc/netplan/*
+        rm -vrf \
+          rootfs/etc/burp* \
+          rootfs/etc/cron*/*burp* \
+          rootfs/etc/systemd/system/*.wants/{docker,harbor}.service
+        sed -i -r \
+          -e "s/((HARBOR_REPLICATION_DISABLED|HARBOR_BACKUP_DISABLED)=).*/\1=1/g" rootfs/srv/docker/harbor/*/.env
+        lxc-start -d -n {{h}}
+        #
+        #
+      mode: "0700"
+      dest: "/var/lib/lxc/staging.sh"
+      force: true
+  - tags: [reset_lxc_do]
+    shell: "/var/lib/lxc/staging.sh"
+- hosts: ["harbor_staging"]
+  tags: [reconfigure_staging]
+  tasks:
+  - {include_role: {name: "harbor/vars", public: y}}
+  - {include_role: {name: "harbor/layout"}}
+  - {include_role: {name: "harbor/configs"}}
+  - shell: |-
+      set -e
+      systemctl enable docker
+      systemctl enable harbor
+      systemctl start docker
+      while !(docker version);do sleep 1;done
+      systemctl start harbor
+- hosts: ["harbor_prod"]
+  tags: [sync_prod_to_staging]
+  tasks:
+  - {include_role: {name: "harbor/vars", public: y}}
+  - shell: |-
+      set -ex
+      cd "{{harbor_hostdir}}"
+      docker-compose exec -T -e "RCLONE_REMOTE_REPLICATE=staging" \
+        rclone /w/replicate.py
+

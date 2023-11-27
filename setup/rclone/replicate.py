@@ -29,16 +29,22 @@ DTFMT = '%Y-%m-%d_%H%M%S'
 replicate_dbs = os.environ.get(
     'REPLICATE_DBS', 'notarysigner notaryserver registry'
 )
+remote_pref = ''
+#
+rclone_remote_replicate = os.environ[f'RCLONE_REMOTE_REPLICATE']
+remote_pref = f'_{rclone_remote_replicate}'.upper()
+#
+rclone_replicate = os.environ[f'RCLONE{remote_pref}_REPLICATE']
 rclone_remote_src = os.environ['RCLONE_REMOTE_SRC']
 rclone_src = os.environ['RCLONE_SRC']
-rclone_remote_replicate = os.environ['RCLONE_REMOTE_REPLICATE']
-rclone_replicate = os.environ['RCLONE_REPLICATE']
-replicate_host = os.environ.get('HARBOR_REPLICATE_SSH_HOST', 'ssh-replicate')
-replicate_host_path = os.environ['HARBOR_REPLICATE_HOST_PATH']
-replicate_url = os.environ['HARBOR_REPLICATE_URL']
+#
+replicate_host = os.environ.get(f'HARBOR{remote_pref}_REPLICATE_SSH_HOST', 'ssh-replicate')
+replicate_host_path = os.environ[f'HARBOR{remote_pref}_REPLICATE_HOST_PATH']
+replicate_url = os.environ[f'HARBOR{remote_pref}_REPLICATE_URL']
+#
 harbor_username = os.environ['HARBOR_USERNAME']
 harbor_password = os.environ['HARBOR_PASSWORD']
-replicate_local_data_path = os.environ['HARBOR_REPLICATE_LOCAL_DATA_PATH']
+replicate_local_data_path = os.environ[f'HARBOR{remote_pref}_REPLICATE_LOCAL_DATA_PATH']
 stop_stack_replicate_script = '''
 ssh -ttt {replicate_host} bash<<EOF
 set -e
@@ -117,8 +123,8 @@ rclone_sync_command = '{rclone} sync -vvv {local_rclone} {dest_rclone}'
 local_rclone = '{rclone_remote_src}:{rclone_src}'
 dest_rclone = '{rclone_remote_replicate}:{rclone_replicate}'
 datadir = '/var/log/rclone'
-log = f'{datadir}/replicatestatus.json'
-LOCK = f'{datadir}/replicatestatus.lock'
+log = f'{datadir}/replicatestatus{remote_pref.lower()}.json'
+LOCK = f'{datadir}/replicatestatus{remote_pref.lower()}.lock'
 backup_status_path = f'{datadir}/{{k}}/{{sdt}}'
 _data = {
     'out': '',
