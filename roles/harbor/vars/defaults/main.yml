@@ -120,6 +120,7 @@ harbor_rclone_failover_common_env: |-
   {% if harbor_has_failover %}
   RCLONE_FAILOVER_REPLICATE={{harbor_replicate_aws_bucket}}
   RCLONE_FAILOVER_REMOTE_REPLICATE=failover
+  RCLONE_REMOTE_REPLICATE=failover
   HARBOR_FAILOVER_REPLICATE_SSH_HOST=ssh-replicate
   HARBOR_FAILOVER_REPLICATE_HOST={{harbor_replicate_host}}
   HARBOR_FAILOVER_REPLICATE_PORT={{harbor_replicate_port}}

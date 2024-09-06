@@ -203,10 +203,9 @@ services:
     - |-
       [[ ! -e /root/.ssh ]] && mkdir /root/.ssh
       cp -v /w/ssh/* /root/.ssh || true
-      sed -i -r -e "s|(log/syslog).*|\1 /var/log/rclone/replicatestatus.json|g" /etc/logrotate.d/rsyslog
       find /root/.ssh -type d | xargs chmod -v 700
       find /root/.ssh -type f | xargs chmod -v 600
-      if [[ -n $${HARBOR_REPLICATE_HOST-} ]];then
+      if [[ -n $${HARBOR_FAILOVER_REPLICATE_HOST} ]];then
       cat >>/etc/crontabs/root<<EOF
       $${HARBOR_REPLICATE_PERIODICITY} bash -c "/w/replicate.py"
       EOF
@@ -223,6 +222,7 @@ services:
       args: {BASE: "${HARBOR_RCLONE_IMAGE}"}
     volumes:
     - ./rclone:/w
+    - ./rclone/logrotate.conf:/etc/logrotate.d/rclone.conf
     - rclone-logs:/var/log
     - dbs:/dbs
     - "{{harbor_data_volume}}:/ldata:ro"

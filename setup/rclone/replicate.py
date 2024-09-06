@@ -22,6 +22,7 @@ import subprocess
 import json
 
 
+replicate_verbose = os.environ.get('REPLICATE_VERBOSE', '') == '1' and 'v' or ''
 HOURS = 60 * 60
 DAYS = HOURS * 24
 LOCK_TIMEOUT = 1 * DAYS
@@ -81,7 +82,7 @@ set -e
 '''
 sync_data_replicate_script = '''
 set -e
-rsync -aAHzv --numeric-ids /ldata/ {replicate_host}:{replicate_local_data_path}/ \
+rsync -aAHz{replicate_verbose} --numeric-ids /ldata/ {replicate_host}:{replicate_local_data_path}/ \
   --exclude=/redis --exclude=/database --exclude=/job_logs
 '''
 reconfigure_replicate_script = '''
@@ -119,7 +120,8 @@ dt = datetime.datetime.now()
 ts = int(dt.timestamp())
 rclone = 'rclone --config {rclone_conf}'
 sdt = dt.strftime(DTFMT)
-rclone_sync_command = '{rclone} sync -vvv {local_rclone} {dest_rclone}'
+replicate_verbose_dash = replicate_verbose and '-' or ''
+rclone_sync_command = '{rclone} sync {replicate_verbose_dash}{replicate_verbose}{replicate_verbose}{replicate_verbose} {local_rclone} {dest_rclone}'
 local_rclone = '{rclone_remote_src}:{rclone_src}'
 dest_rclone = '{rclone_remote_replicate}:{rclone_replicate}'
 datadir = '/var/log/rclone'
